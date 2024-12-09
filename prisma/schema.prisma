@@ -1,0 +1,420 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------- ACCOUNT & SESSION MODELS --------------------
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
+  type              String?
+  provider          String?
+  providerAccountId String?
+  refresh_token     String? @db.String
+  access_token      String? @db.String
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.String
+  session_state     String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id                        String              @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken              String              @unique
+  userId                    String              @db.ObjectId
+  adminProfileId            String?             @db.ObjectId
+  receptionistProfileId     String?             @db.ObjectId
+  doctorNurseProfileId      String?             @db.ObjectId
+  petOwnerProfileId         String?             @db.ObjectId
+  appointmentId             String?             @db.ObjectId
+  medicalhistoryId          String?             @db.ObjectId
+  medicineId                String?             @db.ObjectId
+  antiparasiticId           String?             @db.ObjectId
+  prescriptionId            String?             @db.ObjectId
+  labResultId               String?             @db.ObjectId
+  vaccinationId             String?             @db.ObjectId
+  expires                   DateTime
+  user                      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminProfile              AdminProfile?        @relation(fields: [adminProfileId], references: [id], onDelete: Cascade)
+  receptionistProfile       ReceptionistProfile? @relation(fields: [receptionistProfileId], references: [id], onDelete: Cascade)
+  doctorNurseProfile        DoctorNurseProfile?  @relation(fields: [doctorNurseProfileId], references: [id], onDelete: Cascade)
+  petOwnerProfile           PetOwnerProfile?     @relation(fields: [petOwnerProfileId], references: [id], onDelete: Cascade)
+  pet                       Pet?                 @relation(fields: [doctorNurseProfileId], references: [id], onDelete: Cascade)
+  appointment               Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medicalhistory            MedicalHistory?      @relation(fields: [medicalhistoryId], references: [id], onDelete: Cascade)
+  medicine                  Medicine?            @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  antiparasitic             Antiparasitic?       @relation(fields: [antiparasiticId], references: [id], onDelete: Cascade)
+  prescription              Prescription?        @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  labResult                 LabResult?           @relation(fields: [labResultId], references: [id], onDelete: Cascade)
+  vaccination               Vaccination?         @relation(fields: [vaccinationId], references: [id], onDelete: Cascade)
+}
+
+// -------------------- USER MODEL --------------------
+enum UserRole {
+  ADMIN
+  VET_DOCTOR
+  VET_NURSE
+  VET_RECEPTIONIST
+  PET_OWNER
+}
+
+model User {
+  id                      String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId                  Int               @unique
+  name                    String
+  email                   String            @unique 
+  password                String?
+  emailVerified           DateTime?
+  image                   String?
+  role                    UserRole          @default(VET_DOCTOR)
+  status                  UserStatus        @default(PENDING)
+
+
+  isVerified              Boolean           @default(false)
+  token                   Int?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  Account                 Account[]
+  Session                 Session[]
+  
+  adminProfile            AdminProfile?
+  doctorNurseProfile      DoctorNurseProfile?  
+  receptionistProfile     ReceptionistProfile?
+  petOwnerProfile         PetOwnerProfile?
+}
+
+enum UserStatus {
+  PENDING
+  ONLINE
+  OFFLINE
+  ACTIVE
+}
+
+model AdminProfile {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?           //@unique
+  sex             String
+  address         String?
+  birthDate       DateTime
+  age             Int
+
+  sessions          Session[]         
+  
+  user            User      @relation(fields: [adminId], references: [id])
+  adminId         String    @unique @db.ObjectId
+}
+
+model ReceptionistProfile {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?           //@unique
+  sex             String
+  address         String?
+  birthDate       DateTime
+  age             Int
+
+  Session                 Session[]
+  
+  user            User      @relation(fields: [receptionistId], references: [id])
+  receptionistId  String    @unique @db.ObjectId
+}
+
+// -------------------- DOCTOR & NURSE PROFILE MODELS --------------------
+model DoctorNurseProfile {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?           //@unique
+  sex             String
+  address         String?
+  birthDate       DateTime?
+  age             Int
+  licenseNumber   String?    @unique
+  specialization  String?
+  user            User?      @relation(fields: [doctorNurseId], references: [id])
+  doctorNurseId   String?    @unique @db.ObjectId
+
+  Session                 Session[]
+
+  veterinarianAppointments Appointment[] @relation("VeterinarianAppointments")
+  schedules                 DoctorSchedule[]    @relation("DoctorSchedules")
+}
+
+model DoctorSchedule {
+  id         String              @id @default(auto()) @map("_id") @db.ObjectId
+  doctorId   String              @db.ObjectId
+  dayOfWeek  Int                 // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime  DateTime            // Start of working hours for this day
+  endTime    DateTime            // End of working hours for this day
+  doctor          DoctorNurseProfile @relation("DoctorSchedules", fields: [doctorId], references: [id])
+
+  @@index([doctorId, dayOfWeek], name: "doctor_day_index") // To quickly query by doctor and day
+}
+
+// -------------------- DOCTOR & NURSE PROFILE MODELS --------------------
+model PetOwnerProfile {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  firstName       String?
+  lastName        String?
+  phoneNumber     String?          //@unique
+  sex             String?
+  address         String?
+  birthDate       DateTime?
+  age             Int?
+
+  user            User            @relation(fields: [petOwnerId], references: [id])
+  petOwnerId      String          @unique @db.ObjectId
+
+  Session         Session[]
+  pets            Pet[]           @relation("OwnerPets")
+  appointments    Appointment[]   @relation("OwnerAppointments")
+
+
+}
+
+// -------------------- PET MODEL --------------------
+model Pet {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  petId             Int          @unique
+  petName           String?
+  petSex            String?
+  petSpecies        String?        // Added: Type of pet (e.g., Dog, Cat)
+  petBreed          String?
+  petBirthdate      DateTime?     // Added: Pet's birth date
+  petAge            String?
+  petWeight         String?        // Added: Current weight
+  petColorAndMarkings  String?       // Added: Pet's color
+  petAvatar          String?       // Added: Pet's avatar
+
+
+  owner         PetOwnerProfile?         @relation("OwnerPets", fields: [petOwnerId], references: [id])
+  petOwnerId    String?               @db.ObjectId
+  
+  appointments      Appointment[]
+
+  // Medical History
+  medicalHistories  MedicalHistory[]
+
+  // Medicines
+  medicines         Medicine[]
+
+  // Antiparasitic Treatments
+  antiparasitics    Antiparasitic[]
+
+  // Prescriptions
+  prescriptions   Prescription[]
+
+  // Lab Results
+  labResults      LabResult[]
+
+  // Vaccinations
+  vaccinations    Vaccination[]
+
+  // appointments Appointment[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  sessions          Session[]       
+}
+
+// -------------------- MEDICAL HISTORY --------------------
+model MedicalHistory {
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  petId           String            @db.ObjectId
+  pet             Pet               @relation(fields: [petId], references: [id])
+  type            String
+  date            DateTime
+  note            String?
+  file            String?           // File Attachment (URL or Path)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- MEDICINE --------------------
+model Medicine {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  petId           String          @db.ObjectId
+  pet             Pet             @relation(fields: [petId], references: [id])
+  name            String
+  startDate       DateTime
+  endDate         DateTime?
+  interval        String          // e.g., twice daily, every 4 hours
+  dosage          String
+  note            String?
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- ANTIPARASITIC --------------------
+model Antiparasitic {
+  id                String      @id @default(auto()) @map("_id") @db.ObjectId
+  petId             String      @db.ObjectId
+  pet               Pet         @relation(fields: [petId], references: [id])
+  name              String
+  dateAdministered  DateTime
+  petWeight         Float
+  nextTreatmentDate DateTime?
+  veterinarian      String      // Veterinarian Name
+  vetLicenseNumber  String      // Veterinarian License Number
+  note              String?
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- PRESCRIPTION --------------------
+model Prescription {
+  id                String      @id @default(auto()) @map("_id") @db.ObjectId
+  petId             String      @db.ObjectId
+  pet               Pet         @relation(fields: [petId], references: [id])
+  name              String
+  veterinarian      String      // Veterinarian Name
+  vetLicenseNumber  String      // Veterinarian License Number
+  note              String?
+  file              String?     // File Attachment (URL or Path)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- LAB RESULT --------------------
+model LabResult {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  petId           String         @db.ObjectId
+  pet             Pet            @relation(fields: [petId], references: [id])
+  name            String         // Name of Lab Result
+  datePerformed   DateTime
+  note            String?
+  file            String?        // File Attachment (URL or Path)
+  
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- VACCINATION --------------------
+model Vaccination {
+  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
+  petId                 String        @db.ObjectId
+  pet                   Pet           @relation(fields: [petId], references: [id])
+  dateAdministered      DateTime
+  petWeight             Float
+  name                  String        // Vaccination Name
+  against               String        // Vaccination Against (e.g., Rabies)
+  nextVaccinationDate   DateTime?
+  veterinarian          String        // Veterinarian Name
+  vetLicenseNumber      String        // Veterinarian License Number
+  manufacturer          String?
+  lotNumber             String?
+  note                  String?
+  file                  String?       // File Attachment (URL or Path)
+  
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  Session                 Session[]
+}
+
+// -------------------- APPOINTMENT MODEL --------------------
+model Appointment {
+  id              String              @id @default(auto()) @map("_id") @db.ObjectId
+  pet             Pet?                 @relation(fields: [petId], references: [id])
+  petId           String?              @db.ObjectId  
+  petOwner        PetOwnerProfile?     @relation("OwnerAppointments", fields: [petOwnerId], references: [id])
+  petOwnerId      String?              @db.ObjectId
+  veterinarian    DoctorNurseProfile?  @relation("VeterinarianAppointments", fields: [veterinarianId], references: [id])
+  veterinarianId  String?              @db.ObjectId
+
+  googleMeetLink  String?
+  status          AppointmentStatus   @default(PENDING)   // Start with 'PENDING' status
+  date            DateTime
+  startTime       DateTime            // New field for start time
+  endTime         DateTime?            // New field for end time
+  DurationTime    String?
+  note            String?
+
+  createdAt       DateTime?            @default(now())
+  updatedAt       DateTime?            @updatedAt
+
+  Session         Session[]
+}
+
+enum AppointmentStatus {
+  PENDING       // Newly requested appointments that await vet doctor approval
+  APPROVED      // Approved by the vet doctor
+  DENIED        // Denied by the vet doctor
+  SCHEDULED     // Scheduled after approval
+  RESCHEDULED   // If rescheduling occurs after approval
+  COMPLETED     // When the appointment is finished
+  CANCELED      // If the appointment is canceled
+}
+
+// -------------------- INVOICE & PAYMENT MODEL --------------------
+// model Invoice {
+//   id             String     @id @default(auto()) @map("_id") @db.ObjectId
+//   owner          PetOwnerProfile       @relation(fields: [ownerId], references: [id])
+//   ownerId        String     @db.ObjectId
+//   services       String[]
+//   totalAmount    Float
+//   paymentStatus  PaymentStatus
+//   paymentMethod  PaymentMethod
+//   createdAt      DateTime   @default(now())
+//   updatedAt      DateTime   @updatedAt
+// }
+
+// enum PaymentStatus {
+//   PENDING
+//   PAID
+//   FAILED
+// }
+
+// enum PaymentMethod {
+//   CASH
+//   CARD
+//   ONLINE
+// }
+
+// // -------------------- NOTIFICATION MODEL --------------------
+// model Notification {
+//   id             String     @id @default(auto()) @map("_id") @db.ObjectId
+//   user           User       @relation(fields: [userId], references: [id])
+//   userId         String     @db.ObjectId
+//   message        String
+//   sentAt         DateTime   @default(now())
+//   method         NotificationMethod
+// }
+
+// enum NotificationMethod {
+//   EMAIL
+//   SMS
+// }
+
+// -------------------- ROLE-BASED ACCESS CONTROL --------------------
+// Role-specific access logic will be enforced in the application layer,
+// while the schema defines relationships and entity structure.
